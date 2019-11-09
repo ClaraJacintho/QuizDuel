@@ -96,11 +96,10 @@ class LaunchRequestHandler(AbstractRequestHandler):
 
     def handle(self, handler_input):
         # type: (HandlerInput) -> Response
-        speak_output = "Howdy partner, welcome to QuizzDuel! How many questions do you want to play?"
-        reprompt = "How many questios do you want?"
+        speak_output = "Howdy partner, welcome to QuizzDuel! Solo or multiplayer?"
+        reprompt = "Playing solo or with a friend?"
         session_attr = handler_input.attributes_manager.session_attributes
         session_attr["questions"] = []
-        session_attr["points"] = 0
         session_attr["current_question"] = 0
 
         return (
@@ -109,7 +108,33 @@ class LaunchRequestHandler(AbstractRequestHandler):
                 .ask(reprompt)
                 .response
         )
+class GameModeIntentHandler(AbstractRequestHandler):
+    """Handler for Number of Questions Intent."""
+    def can_handle(self, handler_input):
+        # type: (HandlerInput) -> bool
+        return ask_utils.is_intent_name("GameModeIntent")(handler_input)
 
+    def handle(self, handler_input):
+        # type: (HandlerInput) -> Response
+        slots = handler_input.request_envelope.request.intent.slots
+        mode = slots["Mode"].value
+
+        session_attr = handler_input.attributes_manager.session_attributes
+        session_attr["mode"] = mode
+        if mode == "solo":
+            session_attr["points"] = 0
+        else:
+            session_attr["points_p1"] = 0
+            session_attr["points_p2"] = 0
+            session_attr["curr_player"] = 1
+
+        speak_output = "How many questions do you want to play?" 
+        return (
+            handler_input.response_builder
+                .speak(speak_output)
+                .ask(speak_output)
+                .response
+        )
 
 class QuestionIntentHandler(AbstractRequestHandler):
     """Handler for Number of Questions Intent."""
@@ -125,11 +150,19 @@ class QuestionIntentHandler(AbstractRequestHandler):
         session_attr = handler_input.attributes_manager.session_attributes
         session_attr["number_of_questions"] = int(n)
         current_question = session_attr["current_question"]
-        session_attr["questions"] = get_questions(int(n))
 
-        speak_output = "Okay, getting " + str(n) + " questions. "
-        quest =  "First question: " + get_current_question(session_attr["questions"], current_question)
-        quest += "Options: " +  get_current_options(session_attr["questions"], current_question)
+        speak_output = "Okay, getting " + str(n) + " questions"
+
+        if  session_attr["number_of_questions"] != "solo":
+            n = n*2
+            speak_output += " for each player. First question for player 1: "
+        else:
+            speak_output += ". First question: "
+
+        session_attr["questions"] = get_questions(int(n))
+        
+        quest =  get_current_question(session_attr["questions"], current_question)
+        quest += " Options: " +  get_current_options(session_attr["questions"], current_question)
 
         speak_output += quest
         return (
@@ -153,13 +186,20 @@ class AnswerIntentHandler(AbstractRequestHandler):
         
         session_attr = handler_input.attributes_manager.session_attributes
         questions = session_attr["questions"]
+        mode = session_attr["mode"]
         correct_answer = get_current_answer(questions, session_attr["current_question"])
-        # speak_output = ("Your answer: %s. The correct answer: %s. " % (answer, correct_answer))
-
+       
         intent_name = ask_utils.get_intent_name(handler_input)
         if intent_name == "AnswerIntent":
             if answer.lower() == correct_answer.lower():
-                session_attr["points"] += 1
+                if mode == "solo":
+                    session_attr["points"] += 1
+                else:
+                    if session_attr["curr_player"] == 1:
+                        session_attr["points_p1"] += 1
+                    else:    
+                        session_attr["points_p2"] += 1
+
                 speak_output = "Correct! "
             
             else:
@@ -170,15 +210,35 @@ class AnswerIntentHandler(AbstractRequestHandler):
         
         session_attr["current_question"] += 1
         
-        
+        session_attr["curr_player"] = 1 if session_attr["curr_player"] == 2 else 2
         if session_attr["current_question"] >= session_attr["number_of_questions"]:
-            speak_output += ("Thanks for playing! Total points %d." % session_attr["points"])
+            speak_output += "Thanks for playing!"
+            if mode == "solo":
+                 speak_output += ("Total points %d." % session_attr["points"])
+            else:
+                if session_attr["points_p1"] == session_attr["points_p2"]:
+                    speak_output += ("It's a tie! Amazing! You both got %d points. " % session_attr["points_p1"])
+                else:
+                    if session_attr["points_p2"] > session_attr["points_p2"]:
+                        winner = 1
+                        loser = 2
+                        pointsW = session_attr["points_p1"]
+                        pointsL = session_attr["points_p2"]
+                    else:
+                        winner = 2
+                        loser = 1
+                        pointsW = session_attr["points_p2"]
+                        pointsL = session_attr["points_p1"]  
+
+                    speak_output += ("Congratulations player %d! You won with %d points. Player %d got % points, better luck next time!" % (winner, pointsW, loser, pointsL))
             return (
                 handler_input.response_builder
                     .speak(speak_output)
                     .response
             )
         else:
+            if mode != "solo":
+                speak_output += ("For player %d, " % session_attr["curr_player"])
             speak_output += "Next question: " + get_current_question(questions, session_attr["current_question"]) + " Options: " + get_current_options(questions, session_attr["current_question"])
             reprompt = speak_output
             return (
@@ -300,7 +360,7 @@ sb = SkillBuilder()
 sb.add_request_handler(LaunchRequestHandler())
 sb.add_request_handler(QuestionIntentHandler())
 sb.add_request_handler(AnswerIntentHandler())
-sb.add_request_handler(DontKnowIntentHandler())
+sb.add_request_handler(GameModeIntentHandler())
 sb.add_request_handler(HelpIntentHandler())
 sb.add_request_handler(CancelOrStopIntentHandler())
 sb.add_request_handler(SessionEndedRequestHandler())

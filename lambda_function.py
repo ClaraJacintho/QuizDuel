@@ -145,22 +145,22 @@ class QuestionIntentHandler(AbstractRequestHandler):
     def handle(self, handler_input):
         # type: (HandlerInput) -> Response
         slots = handler_input.request_envelope.request.intent.slots
-        n = slots["questions"].value
+        n = int(slots["questions"].value)
 
         session_attr = handler_input.attributes_manager.session_attributes
-        session_attr["number_of_questions"] = int(n)
-        current_question = session_attr["current_question"]
-
+       
         speak_output = "Okay, getting " + str(n) + " questions"
 
-        if  session_attr["number_of_questions"] != "solo":
-            n = n*2
+        if  session_attr["mode"] != "solo":
+            n *= 2
             speak_output += " for each player. First question for player 1: "
         else:
             speak_output += ". First question: "
 
-        session_attr["questions"] = get_questions(int(n))
-        
+        session_attr["questions"] = get_questions(n)
+        session_attr["number_of_questions"] = n
+        current_question = session_attr["current_question"]
+
         quest =  get_current_question(session_attr["questions"], current_question)
         quest += " Options: " +  get_current_options(session_attr["questions"], current_question)
 
@@ -188,10 +188,10 @@ class AnswerIntentHandler(AbstractRequestHandler):
         questions = session_attr["questions"]
         mode = session_attr["mode"]
         correct_answer = get_current_answer(questions, session_attr["current_question"])
-       
+
         intent_name = ask_utils.get_intent_name(handler_input)
         if intent_name == "AnswerIntent":
-            if answer.lower() == correct_answer.lower():
+            if answer.lower()[0] == correct_answer.lower():
                 if mode == "solo":
                     session_attr["points"] += 1
                 else:
@@ -205,7 +205,7 @@ class AnswerIntentHandler(AbstractRequestHandler):
             else:
                 speak_output = ("Incorrect, the answer was %s . "  % correct_answer)      
         else:
-                speak_output = "That's ok! "
+            speak_output = "That's ok! "
             
         
         session_attr["current_question"] += 1
@@ -214,12 +214,12 @@ class AnswerIntentHandler(AbstractRequestHandler):
         if session_attr["current_question"] >= session_attr["number_of_questions"]:
             speak_output += "Thanks for playing!"
             if mode == "solo":
-                 speak_output += ("Total points %d." % session_attr["points"])
+                speak_output += ("Total points %d. " % session_attr["points"])
             else:
                 if session_attr["points_p1"] == session_attr["points_p2"]:
                     speak_output += ("It's a tie! Amazing! You both got %d points. " % session_attr["points_p1"])
                 else:
-                    if session_attr["points_p2"] > session_attr["points_p2"]:
+                    if session_attr["points_p1"] > session_attr["points_p2"]:
                         winner = 1
                         loser = 2
                         pointsW = session_attr["points_p1"]
@@ -234,6 +234,7 @@ class AnswerIntentHandler(AbstractRequestHandler):
             return (
                 handler_input.response_builder
                     .speak(speak_output)
+                    .set_should_end_session(True)
                     .response
             )
         else:

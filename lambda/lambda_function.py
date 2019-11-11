@@ -24,11 +24,13 @@ logger.setLevel(logging.INFO)
 import requests 
 import base64
 import random
-
+import urllib
 # QUESTIONS = [['Which of the following authors was not born in England? ', 'D', ['Graham Greene', 'H G Wells', 'Arthur C Clarke', 'Arthur Conan Doyle']], ['When Halo 3: ODST was unveiled in 2008, it had a different title. What was the game formally called?', 'B', ['Halo 3: Helljumpers', 'Halo 3: Recon', 'Halo 3: Phantom', 'Halo 3: Guerilla']], ["What word represents the letter 'T' in the NATO phonetic alphabet?", 'C', ['Target', 'Taxi', 'Tango', 'Turkey']], ['What is the real name of Canadian electronic music producer deadmau5?', 'A', ['Joel Zimmerman', 'Sonny Moore', 'Adam Richard Wiles', 'Thomas Wesley Pentz']], ['In the programming language "Python", which of these statements would display the string "Hello World" correctly?', 'B', ['console.log("Hello World")', 'print("Hello World")', 'echo "Hello World"', 'printf("Hello World")']], ['Which female player won the gold medal of table tennis singles in 2016 Olympics Games?', 'D', ['LI Xiaoxia (China)', 'Ai FUKUHARA (Japan)', 'Song KIM (North Korea)', 'DING Ning (China)']], ['What is the smallest country in the world?', 'D', ['Maldives', 'Monaco', 'Malta', 'Vatican City']], ['What is the last name of the primary female protagonist of Final Fantasy VIII?', 'B', ['Loire', 'Heartilly', 'Almasy', 'Trepe']], ["The 'In the Flesh' tour was used in support of what Pink Floyd album?", 'A', ['Animals', 'The Wall', 'Wish You Were Here', 'The Final Cut']], ['What is the star sign of someone born on Valentines day?', 'C', ['Pisces', 'Capricorn', 'Aquarius', 'Scorpio']]]
 
-def decode_b64(s):
-    return str(base64.b64decode(s))[2:-1]
+def decode(s):
+    d = urllib.parse.parse_qs(s, True).keys()
+    return list(d)[0]
+
 
 def get_questions(n = 10):  
     index_to_letter = {
@@ -42,8 +44,9 @@ def get_questions(n = 10):
     URL = "https://opentdb.com/api.php?"
       
     PARAMS = {'amount': n,
-              'type' : 'multiple',
-              'encode':'base64' # base64 is easy to decode from (otherwise no accents/weird chars)
+              'type' : 'multiple'
+              ,"category": 9
+              ,'encode':'url3986' # base64 is easy to decode from (otherwise no accents/weird chars)
              } 
     
     # sending get request and saving the response as response object 
@@ -59,11 +62,11 @@ def get_questions(n = 10):
     else:
         # decode the questions and answers, put them in a dict
         for q in data['results']:
-            enunciate = decode_b64(q['question'])
-            correct = decode_b64(q['correct_answer'])
+            enunciate = decode(q['question'])
+            correct = decode(q['correct_answer'])
             options = []
             for inc in q['incorrect_answers']:
-                options.append(decode_b64(inc))
+                options.append(decode(inc))
             
             # insert the correct answer in a random position in the option array
             index = random.randint(0, len(options))
@@ -84,7 +87,7 @@ def get_current_options(questions, n):
     s = ""
     letters = ["A", "B", "C", "D", "E", "F"]
     for index, option in enumerate(questions[n][2]):
-        s += ("%s - %s. " % (letters[index], option) )
+        s += ("%s - %s. \n" % (letters[index], option) )
     return s
 
 class LaunchRequestHandler(AbstractRequestHandler):
@@ -96,12 +99,12 @@ class LaunchRequestHandler(AbstractRequestHandler):
 
     def handle(self, handler_input):
         # type: (HandlerInput) -> Response
-        speak_output = "Howdy partner, welcome to QuizzDuel! Solo or multiplayer?"
-        reprompt = "Playing solo or with a friend?"
+        speak_output = "Hello there, welcome to Quiz Duel! \nAre you playing solo or multiplayer?"
+        reprompt = "Playing by yourself (solo) or with a friend (miltiplayer)?"
         session_attr = handler_input.attributes_manager.session_attributes
         session_attr["questions"] = []
         session_attr["current_question"] = 0
-
+        session_attr["last_speech"] = speak_output
         return (
             handler_input.response_builder
                 .speak(speak_output)
@@ -109,7 +112,7 @@ class LaunchRequestHandler(AbstractRequestHandler):
                 .response
         )
 class GameModeIntentHandler(AbstractRequestHandler):
-    """Handler for Number of Questions Intent."""
+    """Handler for Game mode Intent."""
     def can_handle(self, handler_input):
         # type: (HandlerInput) -> bool
         return ask_utils.is_intent_name("GameModeIntent")(handler_input)
@@ -129,6 +132,7 @@ class GameModeIntentHandler(AbstractRequestHandler):
             session_attr["curr_player"] = 1
 
         speak_output = "How many questions do you want to play?" 
+        session_attr["last_speech"] = speak_output
         return (
             handler_input.response_builder
                 .speak(speak_output)
@@ -137,7 +141,7 @@ class GameModeIntentHandler(AbstractRequestHandler):
         )
 
 class QuestionIntentHandler(AbstractRequestHandler):
-    """Handler for Number of Questions Intent."""
+    """Handler for (number of) Questions Intent."""
     def can_handle(self, handler_input):
         # type: (HandlerInput) -> bool
         return ask_utils.is_intent_name("QuestionIntent")(handler_input)
@@ -145,11 +149,28 @@ class QuestionIntentHandler(AbstractRequestHandler):
     def handle(self, handler_input):
         # type: (HandlerInput) -> Response
         slots = handler_input.request_envelope.request.intent.slots
-        n = int(slots["questions"].value)
-
         session_attr = handler_input.attributes_manager.session_attributes
+        n = int(slots["questions"].value)
+        if "mode" not in session_attr:
+            return (
+                handler_input.response_builder
+                    .speak("Please select a game mode")
+                    .ask("Please select a game mode")
+                    .response
+            )
+        if (session_attr["mode"] == "solo" and n > 50) or (session_attr["mode"] != "solo" and n > 25):
+            return (
+            handler_input.response_builder
+                .speak("You can only play up to 50 questions for solo and 25 questions for multiplayer at a time, please choose a smaller number")
+                .ask("You can only play up to 50 questions for solo and 25 questions for multiplayer at a time, please choose a smaller number")
+                .response
+            )
        
-        speak_output = "Okay, getting " + str(n) + " questions"
+        speak_output = "Okay, getting " +  str(n)
+        if n > 1:
+            speak_output += " questions"
+        else:
+            speak_output += " question"
 
         if  session_attr["mode"] != "solo":
             n *= 2
@@ -165,6 +186,7 @@ class QuestionIntentHandler(AbstractRequestHandler):
         quest += " Options: " +  get_current_options(session_attr["questions"], current_question)
 
         speak_output += quest
+        session_attr["last_speech"] = speak_output
         return (
             handler_input.response_builder
                 .speak(speak_output)
@@ -173,7 +195,7 @@ class QuestionIntentHandler(AbstractRequestHandler):
         )
 
 class AnswerIntentHandler(AbstractRequestHandler):
-    """Handler for Hello World Intent."""
+    """Handler for Answer Intent."""
     def can_handle(self, handler_input):
         # type: (HandlerInput) -> bool
         return (ask_utils.is_intent_name("AnswerIntent")(handler_input) or
@@ -181,8 +203,12 @@ class AnswerIntentHandler(AbstractRequestHandler):
 
     def handle(self, handler_input):
         # type: (HandlerInput) -> Response
-        slots = handler_input.request_envelope.request.intent.slots
-        answer = slots["Answer"].value
+        letter_to_index = {
+            'A':0,
+            'B':1,
+            'C':2,
+            'D':3
+        }
         
         session_attr = handler_input.attributes_manager.session_attributes
         questions = session_attr["questions"]
@@ -191,6 +217,8 @@ class AnswerIntentHandler(AbstractRequestHandler):
 
         intent_name = ask_utils.get_intent_name(handler_input)
         if intent_name == "AnswerIntent":
+            slots = handler_input.request_envelope.request.intent.slots
+            answer = slots["Answer"].value
             if answer.lower()[0] == correct_answer.lower():
                 if mode == "solo":
                     session_attr["points"] += 1
@@ -199,38 +227,43 @@ class AnswerIntentHandler(AbstractRequestHandler):
                         session_attr["points_p1"] += 1
                     else:    
                         session_attr["points_p2"] += 1
-
+                    
                 speak_output = "Correct! "
             
             else:
-                speak_output = ("Incorrect, the answer was %s . "  % correct_answer)      
+                answer_text = get_correct_answer_text(questions, session_attr["current_question"], letter_to_index[correct_answer])
+                speak_output = ("Incorrect, the answer was %s - %s. "  % (correct_answer, answer_text))      
         else:
-            speak_output = "That's ok! "
+            answer_text = get_correct_answer_text(questions, session_attr["current_question"], letter_to_index[correct_answer])     
+            speak_output = ("That's ok! the answer was %s - %s. "  % (correct_answer, answer_text))
             
-        
         session_attr["current_question"] += 1
+        if mode == "multiplayer":
+            session_attr["curr_player"] = 2 if session_attr["curr_player"] == 1 else 1
+                
         
-        session_attr["curr_player"] = 1 if session_attr["curr_player"] == 2 else 2
         if session_attr["current_question"] >= session_attr["number_of_questions"]:
-            speak_output += "Thanks for playing!"
+            speak_output += "Thanks for playing! "
             if mode == "solo":
-                speak_output += ("Total points %d. " % session_attr["points"])
+                speak_output += ("Final score: %s. " % getPointsString(session_attr["points"]))
             else:
                 if session_attr["points_p1"] == session_attr["points_p2"]:
-                    speak_output += ("It's a tie! Amazing! You both got %d points. " % session_attr["points_p1"])
+                    speak_output += ("It's a tie! Amazing! You both have %s. " % getPointsString(session_attr["points_p1"]))
                 else:
                     if session_attr["points_p1"] > session_attr["points_p2"]:
                         winner = 1
                         loser = 2
-                        pointsW = session_attr["points_p1"]
-                        pointsL = session_attr["points_p2"]
+                        pointsW = getPointsString(session_attr["points_p1"])  
+                        pointsL = getPointsString(session_attr["points_p2"])
                     else:
                         winner = 2
                         loser = 1
-                        pointsW = session_attr["points_p2"]
-                        pointsL = session_attr["points_p1"]  
+                        pointsW = getPointsString(session_attr["points_p2"])
+                        pointsL = getPointsString(session_attr["points_p1"])  
 
-                    speak_output += ("Congratulations player %d! You won with %d points. Player %d got % points, better luck next time!" % (winner, pointsW, loser, pointsL))
+                    speak_output += ("Congratulations player %d! You won with %s. Player %d got %s, better luck next time!" % (winner, pointsW, loser, pointsL))
+            
+            session_attr["last_speech"] = speak_output
             return (
                 handler_input.response_builder
                     .speak(speak_output)
@@ -240,21 +273,25 @@ class AnswerIntentHandler(AbstractRequestHandler):
         else:
             if mode != "solo":
                 speak_output += ("For player %d, " % session_attr["curr_player"])
-            speak_output += "Next question: " + get_current_question(questions, session_attr["current_question"]) + " Options: " + get_current_options(questions, session_attr["current_question"])
-            reprompt = speak_output
+                question_number = (session_attr["current_question"] + 1) // 2
+            else:
+                question_number = (session_attr["current_question"] + 1) 
+            question = get_current_question(questions, session_attr["current_question"]) + " Options: " + get_current_options(questions, session_attr["current_question"])
+            
+            speak_output += ("question number %d: %s" %(question_number, question))
+            reprompt = "Sorry, I didnt get that. Here is your question again: " + question
+            session_attr["last_speech"] = speak_output
             return (
                 handler_input.response_builder
                     .speak(speak_output)
                     .ask(reprompt)
                     .response
             )
-        """
-        return (
-                        handler_input.response_builder
-                            .speak(speak_output)
-                            .response
-                    )
-        """
+
+def getPointsString(n):
+    return str(n) + " points" if n != 1 else str(n) + " point"
+def get_correct_answer_text(questions, q, n):
+    return questions[q][2][n]
 
 class HelpIntentHandler(AbstractRequestHandler):
     """Handler for Help Intent."""
@@ -264,8 +301,10 @@ class HelpIntentHandler(AbstractRequestHandler):
 
     def handle(self, handler_input):
         # type: (HandlerInput) -> Response
-        speak_output = "You can play a cool quiz game!"
-
+        speak_output = """A general knowledge quiz. There are 2 modes: solo, for playing alone, or multiplayer, for playing with a friend. 
+                          You can play up to 50 questions at a time!"""
+        session_attr = handler_input.attributes_manager.session_attributes
+        session_attr["last_speech"] = speak_output
         return (
             handler_input.response_builder
                 .speak(speak_output)
@@ -283,7 +322,7 @@ class CancelOrStopIntentHandler(AbstractRequestHandler):
 
     def handle(self, handler_input):
         # type: (HandlerInput) -> Response
-        speak_output = "So long partner!"
+        speak_output = "Goodbye, hope to see you again soon!" # :)
 
         return (
             handler_input.response_builder
@@ -305,6 +344,20 @@ class SessionEndedRequestHandler(AbstractRequestHandler):
 
         return handler_input.response_builder.response
 
+class RepeatIntentHandler(AbstractRequestHandler):
+    def can_handle(self, handler_input):
+        # type: (HandlerInput) -> bool
+        return ask_utils.is_intent_name("AMAZON.RepeatIntent")(handler_input)
+
+    def handle(self, handler_input):
+        session_attr = handler_input.attributes_manager.session_attributes
+        speak_output = session_attr["last_speech"] 
+        return (
+            handler_input.response_builder
+                .speak(speak_output)
+                .ask(speak_output)
+                .response
+        )
 
 class IntentReflectorHandler(AbstractRequestHandler):
     """The intent reflector is used for interaction model testing and debugging.
@@ -342,7 +395,7 @@ class CatchAllExceptionHandler(AbstractExceptionHandler):
         # type: (HandlerInput, Exception) -> Response
         logger.error(exception, exc_info=True)
 
-        speak_output = "Oops, I had trouble doing what you asked. Please try again."
+        speak_output = "Oops, I had trouble doing what you asked. Please try again. " + str(exception)
 
         return (
             handler_input.response_builder
@@ -364,6 +417,7 @@ sb.add_request_handler(AnswerIntentHandler())
 sb.add_request_handler(GameModeIntentHandler())
 sb.add_request_handler(HelpIntentHandler())
 sb.add_request_handler(CancelOrStopIntentHandler())
+sb.add_request_handler(RepeatIntentHandler())
 sb.add_request_handler(SessionEndedRequestHandler())
 sb.add_request_handler(IntentReflectorHandler()) # make sure IntentReflectorHandler is last so it doesn't override your custom intent handlers
 

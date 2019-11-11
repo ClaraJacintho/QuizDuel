@@ -1,0 +1,232 @@
+{
+    "interactionModel": {
+        "languageModel": {
+            "invocationName": "quiz duel",
+            "intents": [
+                {
+                    "name": "AMAZON.CancelIntent",
+                    "samples": []
+                },
+                {
+                    "name": "AMAZON.HelpIntent",
+                    "samples": []
+                },
+                {
+                    "name": "AMAZON.StopIntent",
+                    "samples": []
+                },
+                {
+                    "name": "AMAZON.RepeatIntent",
+                    "samples": []
+                },
+                {
+                    "name": "AnswerIntent",
+                    "slots": [
+                        {
+                            "name": "Answer",
+                            "type": "AnswerType"
+                        }
+                    ],
+                    "samples": [
+                        "option {Answer}",
+                        "{Answer}",
+                        "the answer is {Answer}",
+                        "my answer is {Answer}",
+                        "it is {Answer}"
+                    ]
+                },
+                {
+                    "name": "DontKnowIntent",
+                    "slots": [],
+                    "samples": [
+                        "i don't know the answer",
+                        "i don't know that one",
+                        "skip",
+                        "I don't know"
+                    ]
+                },
+                {
+                    "name": "QuestionIntent",
+                    "slots": [
+                        {
+                            "name": "questions",
+                            "type": "AMAZON.NUMBER"
+                        }
+                    ],
+                    "samples": [
+                        "{questions}",
+                        "{questions} question",
+                        "Play {questions} questions",
+                        "give me {questions} questions",
+                        "{questions} questions",
+                        "I want {questions} questions"
+                    ]
+                },
+                {
+                    "name": "GameModeIntent",
+                    "slots": [
+                        {
+                            "name": "Mode",
+                            "type": "GameModeType"
+                        }
+                    ],
+                    "samples": [
+                        "{Mode} mode",
+                        "{Mode}"
+                    ]
+                },
+                {
+                    "name": "AMAZON.NavigateHomeIntent",
+                    "samples": []
+                }
+            ],
+            "types": [
+                {
+                    "name": "AnswerType",
+                    "values": [
+                        {
+                            "name": {
+                                "value": "D",
+                                "synonyms": [
+                                    "d"
+                                ]
+                            }
+                        },
+                        {
+                            "name": {
+                                "value": "C",
+                                "synonyms": [
+                                    "c"
+                                ]
+                            }
+                        },
+                        {
+                            "name": {
+                                "value": "B",
+                                "synonyms": [
+                                    "b.",
+                                    "b",
+                                    "b"
+                                ]
+                            }
+                        },
+                        {
+                            "name": {
+                                "value": "A",
+                                "synonyms": [
+                                    "a"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "GameModeType",
+                    "values": [
+                        {
+                            "name": {
+                                "value": "Multiplayer"
+                            }
+                        },
+                        {
+                            "name": {
+                                "value": "Solo"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        "dialog": {
+            "intents": [
+                {
+                    "name": "QuestionIntent",
+                    "confirmationRequired": false,
+                    "prompts": {},
+                    "slots": [
+                        {
+                            "name": "questions",
+                            "type": "AMAZON.NUMBER",
+                            "confirmationRequired": false,
+                            "elicitationRequired": true,
+                            "prompts": {
+                                "elicitation": "Elicit.Slot.1084300353646.1219724166188"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "AnswerIntent",
+                    "confirmationRequired": false,
+                    "prompts": {},
+                    "slots": [
+                        {
+                            "name": "Answer",
+                            "type": "AnswerType",
+                            "confirmationRequired": false,
+                            "elicitationRequired": true,
+                            "prompts": {
+                                "elicitation": "Elicit.Slot.704413946951.1114806044868"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "GameModeIntent",
+                    "confirmationRequired": false,
+                    "prompts": {},
+                    "slots": [
+                        {
+                            "name": "Mode",
+                            "type": "GameModeType",
+                            "confirmationRequired": false,
+                            "elicitationRequired": true,
+                            "prompts": {
+                                "elicitation": "Elicit.Slot.807526038312.517870800310"
+                            }
+                        }
+                    ]
+                }
+            ],
+            "delegationStrategy": "ALWAYS"
+        },
+        "prompts": [
+            {
+                "id": "Elicit.Slot.665817041500.459131836821",
+                "variations": [
+                    {
+                        "type": "PlainText",
+                        "value": "How many questions?"
+                    }
+                ]
+            },
+            {
+                "id": "Elicit.Slot.1084300353646.1219724166188",
+                "variations": [
+                    {
+                        "type": "PlainText",
+                        "value": "How many questions do you want to play?"
+                    }
+                ]
+            },
+            {
+                "id": "Elicit.Slot.704413946951.1114806044868",
+                "variations": [
+                    {
+                        "type": "PlainText",
+                        "value": "What is the correct option?"
+                    }
+                ]
+            },
+            {
+                "id": "Elicit.Slot.807526038312.517870800310",
+                "variations": [
+                    {
+                        "type": "PlainText",
+                        "value": "What game mode?"
+                    }
+                ]
+            }
+        ]
+    }
+}

@@ -22,13 +22,14 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 import requests 
-import base64
 import random
 import urllib
 # QUESTIONS = [['Which of the following authors was not born in England? ', 'D', ['Graham Greene', 'H G Wells', 'Arthur C Clarke', 'Arthur Conan Doyle']], ['When Halo 3: ODST was unveiled in 2008, it had a different title. What was the game formally called?', 'B', ['Halo 3: Helljumpers', 'Halo 3: Recon', 'Halo 3: Phantom', 'Halo 3: Guerilla']], ["What word represents the letter 'T' in the NATO phonetic alphabet?", 'C', ['Target', 'Taxi', 'Tango', 'Turkey']], ['What is the real name of Canadian electronic music producer deadmau5?', 'A', ['Joel Zimmerman', 'Sonny Moore', 'Adam Richard Wiles', 'Thomas Wesley Pentz']], ['In the programming language "Python", which of these statements would display the string "Hello World" correctly?', 'B', ['console.log("Hello World")', 'print("Hello World")', 'echo "Hello World"', 'printf("Hello World")']], ['Which female player won the gold medal of table tennis singles in 2016 Olympics Games?', 'D', ['LI Xiaoxia (China)', 'Ai FUKUHARA (Japan)', 'Song KIM (North Korea)', 'DING Ning (China)']], ['What is the smallest country in the world?', 'D', ['Maldives', 'Monaco', 'Malta', 'Vatican City']], ['What is the last name of the primary female protagonist of Final Fantasy VIII?', 'B', ['Loire', 'Heartilly', 'Almasy', 'Trepe']], ["The 'In the Flesh' tour was used in support of what Pink Floyd album?", 'A', ['Animals', 'The Wall', 'Wish You Were Here', 'The Final Cut']], ['What is the star sign of someone born on Valentines day?', 'C', ['Pisces', 'Capricorn', 'Aquarius', 'Scorpio']]]
 
 def decode(s):
+    # urllib returns a dictionary
     d = urllib.parse.parse_qs(s, True).keys()
+    # so we get only our parsed string
     return list(d)[0]
 
 
@@ -45,8 +46,7 @@ def get_questions(n = 10):
       
     PARAMS = {'amount': n,
               'type' : 'multiple'
-              ,"category": 9
-              ,'encode':'url3986' # base64 is easy to decode from (otherwise no accents/weird chars)
+              ,'encode':'url3986' # url3986 because it bugs out on the default encoding
              } 
     
     # sending get request and saving the response as response object 
@@ -85,10 +85,16 @@ def get_current_answer(questions, n):
 
 def get_current_options(questions, n):
     s = ""
-    letters = ["A", "B", "C", "D", "E", "F"]
+    letters = ["A", "B", "C", "D"]
     for index, option in enumerate(questions[n][2]):
         s += ("%s - %s. \n" % (letters[index], option) )
     return s
+
+def getPointsString(n):
+    return str(n) + " points" if n != 1 else str(n) + " point"
+
+def get_correct_answer_text(questions, q, n):
+    return questions[q][2][n]
 
 class LaunchRequestHandler(AbstractRequestHandler):
     """Handler for Skill Launch."""
@@ -111,6 +117,7 @@ class LaunchRequestHandler(AbstractRequestHandler):
                 .ask(reprompt)
                 .response
         )
+
 class GameModeIntentHandler(AbstractRequestHandler):
     """Handler for Game mode Intent."""
     def can_handle(self, handler_input):
@@ -151,13 +158,17 @@ class QuestionIntentHandler(AbstractRequestHandler):
         slots = handler_input.request_envelope.request.intent.slots
         session_attr = handler_input.attributes_manager.session_attributes
         n = int(slots["questions"].value)
+
+        # We check that the game mode has actually been selected, if not, we ask the user to select it
         if "mode" not in session_attr:
             return (
                 handler_input.response_builder
-                    .speak("Please select a game mode")
+                    .speak("Please select a game mode, solo or multiplayer")
                     .ask("Please select a game mode")
                     .response
             )
+        
+        # we can only get max 50 questions from the API 
         if (session_attr["mode"] == "solo" and n > 50) or (session_attr["mode"] != "solo" and n > 25):
             return (
             handler_input.response_builder
@@ -165,7 +176,7 @@ class QuestionIntentHandler(AbstractRequestHandler):
                 .ask("You can only play up to 50 questions for solo and 25 questions for multiplayer at a time, please choose a smaller number")
                 .response
             )
-       
+
         speak_output = "Okay, getting " +  str(n)
         if n > 1:
             speak_output += " questions"
@@ -288,11 +299,6 @@ class AnswerIntentHandler(AbstractRequestHandler):
                     .response
             )
 
-def getPointsString(n):
-    return str(n) + " points" if n != 1 else str(n) + " point"
-def get_correct_answer_text(questions, q, n):
-    return questions[q][2][n]
-
 class HelpIntentHandler(AbstractRequestHandler):
     """Handler for Help Intent."""
     def can_handle(self, handler_input):
@@ -312,7 +318,6 @@ class HelpIntentHandler(AbstractRequestHandler):
                 .response
         )
 
-
 class CancelOrStopIntentHandler(AbstractRequestHandler):
     """Single handler for Cancel and Stop Intent."""
     def can_handle(self, handler_input):
@@ -329,20 +334,6 @@ class CancelOrStopIntentHandler(AbstractRequestHandler):
                 .speak(speak_output)
                 .response
         )
-
-
-class SessionEndedRequestHandler(AbstractRequestHandler):
-    """Handler for Session End."""
-    def can_handle(self, handler_input):
-        # type: (HandlerInput) -> bool
-        return ask_utils.is_request_type("SessionEndedRequest")(handler_input)
-
-    def handle(self, handler_input):
-        # type: (HandlerInput) -> Response
-
-        # Any cleanup logic goes here.
-
-        return handler_input.response_builder.response
 
 class RepeatIntentHandler(AbstractRequestHandler):
     def can_handle(self, handler_input):
@@ -381,7 +372,6 @@ class IntentReflectorHandler(AbstractRequestHandler):
                 .response
         )
 
-
 class CatchAllExceptionHandler(AbstractExceptionHandler):
     """Generic error handling to capture any syntax or routing errors. If you receive an error
     stating the request handler chain is not found, you have not implemented a handler for
@@ -407,8 +397,6 @@ class CatchAllExceptionHandler(AbstractExceptionHandler):
 # The SkillBuilder object acts as the entry point for your skill, routing all request and response
 # payloads to the handlers above. Make sure any new handlers or interceptors you've
 # defined are included below. The order matters - they're processed top to bottom.
-
-
 sb = SkillBuilder()
 
 sb.add_request_handler(LaunchRequestHandler())
